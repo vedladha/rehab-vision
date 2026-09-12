@@ -1,0 +1,15 @@
+.env
+.conda-env/
+__pycache__/
+.pytest_cache/
+*.pyc
+data/input/*
+!data/input/.gitkeep
+data/cache/*
+!data/cache/.gitkeep
+data/output/*
+!data/output/.gitkeep
+*.pdf
+*.mov
+*.mp4
+.DS_Store
