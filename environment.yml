@@ -1,0 +1,14 @@
+name: rehab-vision
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - ffmpeg
+  - py-opencv
+  - numpy
+  - matplotlib-base
+  - pillow
+  - python-dotenv
+  - pytest
+  - pip
+  - pip:
+      - openai>=1.40
