@@ -2,11 +2,6 @@
 
 Recorded-video movement analysis for four exercises in a home program. It reports observable timing, counts, and 2D consistency. It is not a clinical safety assessment, diagnosis, or exercise prescription.
 
-The flow is:
-
-`video -> ViTPose+ keypoints -> movement signal -> phase detector -> metrics -> annotated report`
-
-The project follows Jeremy Park's `vision-demos/chin_ups` and `running` scaffolding and dark split-screen presentation (Apache-2.0; reference commit `5e4b92195d16889c21cd5de55c9f14337d5d8542`). See `NOTICE` and `LICENSE`.
 
 ## Run it
 
