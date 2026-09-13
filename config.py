@@ -2,14 +2,15 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_DIR / "data"
-INPUT_VIDEO = DATA_DIR / "input" / "exercise.mov"
+INPUT_VIDEO = DATA_DIR / "input" / "squat_front.mov"
 
 # Choose: squat, side_step_balance, skater_squat, single_leg_rdl
 EXERCISE = "squat"
 # Choose front, side, or oblique. 
-CAMERA_VIEW = "side"
+CAMERA_VIEW = "front"
 # Required for skater_squat and single_leg_rdl: left or right.
 # For skater squat this is the moving leg; for RDL it is the supporting leg.
+# Ignored for squat, which counts whole-body repetitions.
 ANALYZED_LEG = "right"
 
 MODEL = "usyd-community/vitpose-plus-large"

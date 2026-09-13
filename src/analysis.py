@@ -470,7 +470,7 @@ def analyze(
                     round(peak / fps, 3),
                     round(end / fps, 3),
                 ],
-                leg=leg,
+                leg=None if exercise == "squat" else leg,
             )
         )
 

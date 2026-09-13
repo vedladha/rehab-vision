@@ -9,6 +9,7 @@ WHITE = (245, 245, 245)
 MUTED = (145, 150, 158)
 BLUE = (255, 160, 40)
 GREEN = (102, 207, 81)
+ORANGE = (40, 155, 255)
 
 
 def put(image, text, position, scale, color=WHITE, weight=2):
@@ -24,153 +25,119 @@ def put(image, text, position, scale, color=WHITE, weight=2):
     )
 
 
-def panel(
-    analysis,
-    frame,
-    width,
-    height,
-    prescription,
-    tracking_status,
-):
-    image = np.full((height, width, 3), BG, np.uint8)
+def centered(image, text, x, y, scale, color=WHITE):
+    size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)
+    put(image, text, (int(x - size[0] / 2), y), scale, color, 1)
+
+
+def completed_durations(analysis, frame):
     current_time = frame / analysis.fps
-    count = analysis.count_at(frame)
-    phase = (
-        analysis.phase[min(frame, len(analysis.phase) - 1)]
-        if analysis.phase
-        else "unavailable"
-    )
+    events = [
+        event for event in analysis.events
+        if event.status == "complete" and event.end_s <= current_time
+    ]
+    durations = []
+    for number, event in enumerate(events, 1):
+        duration = event.metrics.get("duration_s")
+        if analysis.exercise == "side_step_balance":
+            duration = event.end_s - event.start_s
+        if duration is None or not np.isfinite(duration) or duration <= 0:
+            duration = None
+        durations.append((number, duration))
+    return durations
 
-    put(
-        image,
-        analysis.exercise.replace("_", " ").title(),
-        (40, 60),
-        1.0,
-    )
-    put(image, str(count), (40, 155), 2.7, WHITE, 5)
-    put(image, "observed complete", (45, 190), 0.55, MUTED)
 
-    target = prescription.get(
-        "reps_per_set",
-        prescription.get(
-            "sequences_per_set",
-            prescription.get("reps_per_leg"),
-        ),
-    )
-    put(
-        image,
-        f"Prescription: {prescription['sets']} x {target}",
-        (40, 230),
-        0.62,
-        MUTED,
-    )
+def duration_chart(image, durations, unit):
+    left, top, right, bottom = 110, 460, 554, 790
+    known = [(number, value) for number, value in durations if value is not None]
+    values = [value for _, value in known]
+    padding = max((max(values) - min(values)) * 0.35, 0.15) if values else 0
+    lower = max(0, min(values) - padding) if values else 0
+    upper = max(values) + padding if values else 2
+    x_limit = max(6, len(durations))
 
-    put(image, "CURRENT FRAME", (40, 290), 0.48, MUTED)
-    put(image, f"Phase  {phase}", (40, 330), 0.74, BLUE)
-    put(image, f"Time   {current_time:6.2f}s", (40, 370), 0.64)
+    put(image, f"{unit.title()} duration", (40, 386), 0.85)
+    put(image, "Completed so far", (40, 418), 0.48, MUTED, 1)
 
-    tracking_color = GREEN if tracking_status == "observed" else MUTED
-    put(
-        image,
-        f"Tracking  {tracking_status}",
-        (40, 410),
-        0.54,
-        tracking_color,
-    )
+    axis_label = np.full((32, 190, 3), BG, np.uint8)
+    centered(axis_label, "Duration (s)", 95, 22, 0.53, MUTED)
+    axis_label = cv2.rotate(axis_label, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    image[530:720, 22:54] = axis_label
 
-    put(image, "OBSERVED EVENTS", (40, 470), 0.48, MUTED)
-    visible_events = [
-        event
-        for event in analysis.events
-        if event.end_s <= current_time
-    ][-2:]
+    for value in np.linspace(lower, upper, 5):
+        y = int(bottom - (value - lower) / (upper - lower) * (bottom - top))
+        cv2.line(image, (left, y), (right, y), (43, 46, 51), 1)
+        centered(image, f"{value:.2f}", 79, y + 5, 0.43, MUTED)
 
-    event_y = 510
-    for event in visible_events:
-        duration = event.metrics.get(
-            "duration_s",
-            event.metrics.get("balance_duration_s"),
-        )
-        label = f"{event.number:02d}  {event.status.replace('_', ' ')}"
-        if duration is not None:
-            label += f"  {duration:.2f}s"
+    def x_position(number):
+        return int(left + (number - 0.5) / x_limit * (right - left))
 
-        event_color = WHITE if event.status == "complete" else (90, 170, 255)
-        put(image, label, (40, event_y), 0.48, event_color)
-        event_y += 31
+    tick_step = max(1, int(np.ceil(x_limit / 12)))
+    for number in range(1, x_limit + 1):
+        if (number - 1) % tick_step == 0 or number == x_limit:
+            centered(image, str(number), x_position(number), bottom + 29, 0.48, MUTED)
+    centered(image, f"{unit.title()} number", (left + right) / 2, bottom + 66, 0.53, MUTED)
 
-    signal_name = next(iter(analysis.signals))
-    values = np.asarray(analysis.signals[signal_name], dtype=float)
-    chart = (40, height - 150, width - 40, height - 78)
-    cv2.rectangle(
-        image,
-        (chart[0], chart[1]),
-        (chart[2], chart[3]),
-        (45, 48, 55),
-        1,
-    )
+    if not known:
+        centered(image, f"Waiting for a completed {unit}", (left + right) / 2, 620, 0.49, MUTED)
+        return
 
-    finite_values = values[np.isfinite(values)]
-    if len(finite_values) and frame > 1:
-        minimum = float(finite_values.min())
-        maximum = float(finite_values.max())
-        span = max(maximum - minimum, 1e-6)
-        visible_count = min(frame + 1, len(values))
-        points = []
+    fastest = min(values)
+    slowest = max(values)
+    previous = None
+    for number, value in durations:
+        if value is None:
+            previous = None
+            continue
+        point = (x_position(number), int(bottom - (value - lower) / (upper - lower) * (bottom - top)))
+        if previous is not None:
+            cv2.line(image, previous, point, BLUE, 2, cv2.LINE_AA)
+        color = BLUE
+        if len(known) > 1 and fastest < slowest:
+            color = GREEN if value == fastest else ORANGE if value == slowest else BLUE
+        cv2.circle(image, point, 7, color, -1, cv2.LINE_AA)
+        if x_limit <= 10:
+            centered(image, f"{value:.2f}", point[0], point[1] - 18, 0.44)
+        previous = point
 
-        for index, value in enumerate(values[:visible_count]):
-            if not np.isfinite(value):
-                continue
 
-            x = int(
-                chart[0]
-                + (chart[2] - chart[0])
-                * index
-                / max(1, len(values) - 1)
-            )
-            y = int(
-                chart[3]
-                - (chart[3] - chart[1])
-                * (value - minimum)
-                / span
-            )
-            points.append((x, y))
+def duration_summary(image, durations, unit):
+    known = [(number, value) for number, value in durations if value is not None]
+    if len(known) < 2:
+        put(image, "Fastest / slowest: unavailable", (40, 931), 0.59, MUTED)
+        put(image, f"Needs two completed {unit}s with timing", (40, 971), 0.48, MUTED, 1)
+        return
 
-        if len(points) > 1:
-            cv2.polylines(
-                image,
-                [np.asarray(points, np.int32)],
-                False,
-                BLUE,
-                2,
-                cv2.LINE_AA,
-            )
+    fastest = min(known, key=lambda item: item[1])
+    slowest = max(known, key=lambda item: item[1])
+    difference = (slowest[1] - fastest[1]) / fastest[1] * 100
+    put(image, f"Fastest   {unit} {fastest[0]}  /  {fastest[1]:.2f}s", (40, 922), 0.64, GREEN)
+    put(image, f"Slowest   {unit} {slowest[0]}  /  {slowest[1]:.2f}s", (40, 967), 0.64, ORANGE)
+    put(image, f"{difference:.1f}% longer than fastest", (40, 1018), 0.59, MUTED)
 
-    put(
-        image,
-        "movement signal (through current frame)",
-        (40, height - 158),
-        0.40,
-        MUTED,
-        1,
-    )
-    put(
-        image,
-        "Whole-session values appear only after observed",
-        (40, height - 64),
-        0.42,
-        MUTED,
-        1,
-    )
-    put(
-        image,
-        "events. Measurements are 2D pose estimates.",
-        (40, height - 38),
-        0.42,
-        MUTED,
-        1,
-    )
-    return image
+
+def panel(analysis, frame, width, height, prescription=None, tracking_status=None):
+    image = np.full((1080, 608, 3), BG, np.uint8)
+    durations = completed_durations(analysis, frame)
+    unit = "sequence" if analysis.exercise == "side_step_balance" else "rep"
+    phase = analysis.phase[min(frame, len(analysis.phase) - 1)] if analysis.phase else "unavailable"
+
+    put(image, analysis.exercise.replace("_", " ").title(), (40, 62), 0.95)
+    put(image, str(analysis.count_at(frame)), (40, 180), 3.2, WHITE, 5)
+    put(image, f"completed {unit}s", (43, 218), 0.57, MUTED)
+    put(image, "CURRENT PHASE", (40, 280), 0.48, MUTED)
+    put(image, phase.replace("_", " ").capitalize(), (40, 321), 0.85, BLUE)
+
+    duration_chart(image, durations, unit)
+    duration_summary(image, durations, unit)
+
+    scale = min(width / 608, height / 1080)
+    resized = cv2.resize(image, (round(608 * scale), round(1080 * scale)), interpolation=cv2.INTER_AREA)
+    result = np.full((height, width, 3), BG, np.uint8)
+    x = (width - resized.shape[1]) // 2
+    y = (height - resized.shape[0]) // 2
+    result[y:y + resized.shape[0], x:x + resized.shape[1]] = resized
+    return result
 
 
 def render(video, track, analysis, output, prescription):

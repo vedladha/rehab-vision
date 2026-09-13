@@ -160,7 +160,7 @@ def main():
         "input_name": cfg.INPUT_VIDEO.name,
         "exercise": cfg.EXERCISE,
         "camera_view": cfg.CAMERA_VIEW,
-        "analyzed_leg": cfg.ANALYZED_LEG,
+        "analyzed_leg": None if cfg.EXERCISE == "squat" else cfg.ANALYZED_LEG,
         "model": cfg.MODEL,
         "gateway_base_url": cfg.GATEWAY_BASE_URL,
         "gateway_authentication": gateway_authentication,
