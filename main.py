@@ -26,7 +26,7 @@ def main():
     from src.render import render
     from src.report import plot, write_reports
 
-    load_dotenv(cfg.PROJECT_DIR / ".env")
+    load_dotenv(cfg.PROJECT_DIR / ".env", override=True)
 
     if cfg.EXERCISE not in cfg.PRESCRIPTION:
         raise ValueError(f"Unknown exercise: {cfg.EXERCISE}")
@@ -44,12 +44,15 @@ def main():
     converted = cfg.CACHE_DIR / f"{cfg.INPUT_VIDEO.stem}.converted.mp4"
     stage_started = time.perf_counter()
     if not converted.exists():
+        print("Converting video...", flush=True)
         video.convert(
             cfg.INPUT_VIDEO,
             converted,
             cfg.INFERENCE_HEIGHT,
             cfg.CONVERT_CRF,
         )
+    else:
+        print("Using cached converted video.", flush=True)
     metrics["conversion_s"] = time.perf_counter() - stage_started
 
     info = video.inspect(converted)
@@ -64,9 +67,13 @@ def main():
 
     usage = None
     if cfg.REUSE_POSES and pose_cache.exists():
-        payload = json.loads(pose_cache.read_text())["payload"]
+        print("Using cached pose response.", flush=True)
+        cached = json.loads(pose_cache.read_text())
+        payload = cached["payload"]
+        gateway_authentication = cached.get("authentication", "unknown_cached")
         api_seconds = 0.0
     else:
+        print("Uploading video and estimating poses...", flush=True)
         api_key = os.getenv("VLMRUN_API_KEY")
         if not api_key:
             raise RuntimeError(
@@ -74,6 +81,7 @@ def main():
                 "and add it locally."
             )
 
+        gateway_authentication = "api_key"
         client = OpenAI(
             api_key=api_key,
             base_url=cfg.GATEWAY_BASE_URL,
@@ -91,6 +99,7 @@ def main():
                 {
                     "created_utc": datetime.now(timezone.utc).isoformat(),
                     "model": cfg.MODEL,
+                    "authentication": gateway_authentication,
                     "payload": payload,
                     "usage": usage,
                     "request": request_options,
@@ -102,6 +111,7 @@ def main():
     raw_pose_path = output_dir / "raw_pose_response.json"
     raw_pose_path.write_text(json.dumps(payload, indent=2))
 
+    print("Analyzing movement...", flush=True)
     stage_started = time.perf_counter()
     poses, tracking_quality = select_track(unwrap(payload), info["frames"])
     track = interpolate_short_gaps(
@@ -121,6 +131,7 @@ def main():
     )
     metrics["analysis_s"] = time.perf_counter() - stage_started
 
+    print("Rendering dashboard video...", flush=True)
     stage_started = time.perf_counter()
     temporary_video = output_dir / "annotated.temp.mp4"
     render_meta = render(
@@ -132,6 +143,7 @@ def main():
     )
     metrics["rendering_s"] = time.perf_counter() - stage_started
 
+    print("Encoding final MP4...", flush=True)
     stage_started = time.perf_counter()
     final_video = output_dir / "annotated.mp4"
     video.encode(temporary_video, final_video, cfg.OUTPUT_CRF)
@@ -150,6 +162,8 @@ def main():
         "camera_view": cfg.CAMERA_VIEW,
         "analyzed_leg": cfg.ANALYZED_LEG,
         "model": cfg.MODEL,
+        "gateway_base_url": cfg.GATEWAY_BASE_URL,
+        "gateway_authentication": gateway_authentication,
         "request": request_options,
         "reference_commit": "5e4b92195d16889c21cd5de55c9f14337d5d8542",
         "usage": usage,
@@ -170,7 +184,7 @@ def main():
     prescription = cfg.PRESCRIPTION[cfg.EXERCISE]
     write_reports(output_dir, analysis, prescription, run)
     plot(output_dir, analysis)
-    print(output_dir)
+    print(f"Complete: {output_dir}", flush=True)
 
 
 if __name__ == "__main__":
