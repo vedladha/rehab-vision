@@ -3,6 +3,12 @@
 Recorded-video movement analysis for four exercises in a home program. It reports observable timing, counts, and 2D consistency. It is not a clinical safety assessment, diagnosis, or exercise prescription.
 
 
+## Example output
+
+![Side-view squat video with pose landmarks, repetition count, movement phase, and dashboard](docs/images/squat-side-dashboard.jpg)
+
+Frame at 18.00 seconds from a recorded side-view squat, showing three detected completed repetitions. Counts and measurements are estimates.
+
 ## Run it
 
 1. **Get a VLM Run API key** at [app.vlm.run/sign-in](https://app.vlm.run/sign-in).
