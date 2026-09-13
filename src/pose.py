@@ -4,7 +4,8 @@ import base64, hashlib, json, time
 from pathlib import Path
 import numpy as np
 
-CONTENT_OBJECT = "vitpose_plus.pose.frames"
+CONTENT_OBJECT = "vid.pose.kpts"
+SUPPORTED_CONTENT_OBJECTS = {CONTENT_OBJECT, "vitpose_plus.pose.frames"}
 
 def build_request(video, fps, n_frames, cfg):
     extra = {"method": "pose", "video_fps": fps if cfg.EVERY_FRAME else cfg.VIDEO_FPS,
@@ -24,9 +25,29 @@ def request(client, video_b64, extra, cfg):
 
 def unwrap(payload):
     content = payload["data"][0]["content"]
-    if content.get("object") != CONTENT_OBJECT:
+    if content.get("object") not in SUPPORTED_CONTENT_OBJECTS:
         raise RuntimeError(f"Expected {CONTENT_OBJECT}, got {content.get('object')!r}")
-    return content["items"]
+    if content["object"] == "vitpose_plus.pose.frames":
+        return content["items"]
+
+    frames = {}
+    for metadata in content.get("frames", []):
+        index = _frame_index(metadata.get("frame_index"))
+        frames[index] = {"index": index, "persons": []}
+
+    # New responses list people separately; group them by their actual frame.
+    for person in content["items"]:
+        index = _frame_index(person.get("frame"))
+        frame = frames.setdefault(index, {"index": index, "persons": []})
+        frame["persons"].append(person)
+
+    return [frames[index] for index in sorted(frames)]
+
+
+def _frame_index(value):
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"Invalid pose frame index: {value!r}")
+    return value
 
 def cache_key(video, model, extra):
     path = Path(video); stat = path.stat()
@@ -47,7 +68,10 @@ def select_track(frames, n_frames):
     result = [None] * n_frames; quality = []
     previous_id = None
     for item in frames:
-        i = int(item["index"]); people = item.get("persons") or []
+        i = _frame_index(item.get("index"))
+        if i >= n_frames:
+            raise ValueError(f"Pose frame {i} exceeds video length {n_frames}")
+        people = item.get("persons") or []
         status = "missing"
         if people:
             chosen = next((p for p in people if p.get("track_id") == previous_id), None)
