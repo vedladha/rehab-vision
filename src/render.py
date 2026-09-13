@@ -111,8 +111,8 @@ def duration_summary(image, durations, unit):
     fastest = min(known, key=lambda item: item[1])
     slowest = max(known, key=lambda item: item[1])
     difference = (slowest[1] - fastest[1]) / fastest[1] * 100
-    put(image, f"Fastest   {unit} {fastest[0]}  /  {fastest[1]:.2f}s", (40, 922), 0.64, GREEN)
-    put(image, f"Slowest   {unit} {slowest[0]}  /  {slowest[1]:.2f}s", (40, 967), 0.64, ORANGE)
+    put(image, f"Fastest:    {unit} {fastest[0]}  /  {fastest[1]:.2f}s", (40, 922), 0.64, GREEN)
+    put(image, f"Slowest:   {unit} {slowest[0]}  /  {slowest[1]:.2f}s", (40, 967), 0.64, ORANGE)
     put(image, f"{difference:.1f}% longer than fastest", (40, 1018), 0.59, MUTED)
 
 
