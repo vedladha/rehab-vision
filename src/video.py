@@ -51,7 +51,7 @@ def convert(source, output, height, crf):
             "0",
             "-vf",
             f"scale=-2:'min({height},ih)'",
-            "-vsync",
+            "-fps_mode",
             "cfr",
             "-c:v",
             "libx264",
