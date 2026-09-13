@@ -7,7 +7,6 @@ Recorded-video movement analysis for four exercises in a home program. It report
 
 ![Side-view squat video with pose landmarks, repetition count, movement phase, and dashboard](docs/images/squat-side-dashboard.jpg)
 
-Frame at 18.00 seconds from a recorded side-view squat, showing three detected completed repetitions. Counts and measurements are estimates.
 
 ## Run it
 
