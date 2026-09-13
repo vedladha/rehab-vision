@@ -2,16 +2,16 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_DIR / "data"
-INPUT_VIDEO = DATA_DIR / "input" / "squat_front.mov"
+INPUT_VIDEO = DATA_DIR / "input" / "rdl_left_side.mov"
 
 # Choose: squat, side_step_balance, skater_squat, single_leg_rdl
-EXERCISE = "squat"
+EXERCISE = "single_leg_rdl"
 # Choose front, side, or oblique. 
 CAMERA_VIEW = "front"
 # Required for skater_squat and single_leg_rdl: left or right.
 # For skater squat this is the moving leg; for RDL it is the supporting leg.
 # Ignored for squat, which counts whole-body repetitions.
-ANALYZED_LEG = "right"
+ANALYZED_LEG = "left"
 
 MODEL = "usyd-community/vitpose-plus-large"
 GATEWAY_BASE_URL = "https://gateway.vlm.run/v1/openai"
@@ -36,6 +36,16 @@ MIN_REP_SECONDS = 0.65
 AMPLITUDE_FRACTION = 0.18
 RETURN_FRACTION = 0.35
 BALANCE_MIN_SECONDS = 0.35
+
+# Provisional RDL detection settings, not clinical targets.
+RDL_ENTER_LEAN_DEG = 30.0
+RDL_RETURN_LEAN_DEG = 20.0
+RDL_PEAK_LEAN_DEG = 45.0
+RDL_PAUSE_TOLERANCE_DEG = 2.0
+RDL_MIN_KEYPOINT_CONFIDENCE = 0.3
+RDL_SWAP_MIN_DISPLACEMENT = 0.03
+RDL_OVERLAP_DISTANCE = 0.01
+RDL_ANKLE_TRAIL_SECONDS = 2.0
 
 OUTPUT_DIR = DATA_DIR / "output"
 CACHE_DIR = DATA_DIR / "cache"

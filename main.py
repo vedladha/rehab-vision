@@ -30,6 +30,8 @@ def main():
 
     if cfg.EXERCISE not in cfg.PRESCRIPTION:
         raise ValueError(f"Unknown exercise: {cfg.EXERCISE}")
+    if cfg.EXERCISE == "single_leg_rdl" and cfg.ANALYZED_LEG not in ("left", "right"):
+        raise ValueError("Set ANALYZED_LEG to the supporting left or right leg.")
     if not cfg.INPUT_VIDEO.is_file():
         raise FileNotFoundError(f"Put one recording at {cfg.INPUT_VIDEO}")
 
@@ -119,6 +121,20 @@ def main():
         info["fps"],
         cfg.INTERPOLATION_MAX_SECONDS,
     )
+    if cfg.EXERCISE == "single_leg_rdl":
+        import numpy as np
+
+        identity_valid = np.zeros(info["frames"], bool)
+        for item in tracking_quality:
+            identity_valid[item["frame"]] = item["person_count"] == 1
+        previous_id = None
+        for index, pose in enumerate(poses):
+            if pose is not None:
+                current_id = pose["track_id"]
+                if previous_id is not None and current_id != previous_id:
+                    identity_valid[index] = False
+                previous_id = current_id
+        track["identity_valid"] = identity_valid
     analysis = analyze(
         track,
         info["fps"],
@@ -170,6 +186,7 @@ def main():
         "api_cost": None,
         "processing": metrics,
         "tracking_quality": tracking_quality,
+        "analysis_details": analysis.details,
         "render": render_meta,
         "provisional_detection_settings": {
             "smooth_seconds": cfg.SMOOTH_SECONDS,

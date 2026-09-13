@@ -1,6 +1,6 @@
 """Turn pose coordinates into exercise phases, events, and measurements."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
@@ -36,6 +36,7 @@ class Analysis:
     signals: dict
     availability: dict
     tracking: dict
+    details: dict = field(default_factory=dict)
 
     def count_at(self, frame):
         """Count only events completed by the displayed video frame."""
@@ -400,6 +401,11 @@ def analyze(
     height=None,
 ):
     """Analyze squat, skater squat, RDL, or step-balance movement."""
+    if exercise == "single_leg_rdl":
+        from .rdl import analyze_rdl
+
+        return analyze_rdl(track, fps, view, leg, cfg, width, height)
+
     if exercise == "side_step_balance":
         return _analyze_steps(track, fps, view, cfg)
 

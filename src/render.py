@@ -47,8 +47,8 @@ def completed_durations(analysis, frame):
     return durations
 
 
-def duration_chart(image, durations, unit):
-    left, top, right, bottom = 110, 460, 554, 790
+def duration_chart(image, durations, unit, compact=False):
+    left, top, right, bottom = (110, 665, 554, 815) if compact else (110, 460, 554, 790)
     known = [(number, value) for number, value in durations if value is not None]
     values = [value for _, value in known]
     padding = max((max(values) - min(values)) * 0.35, 0.15) if values else 0
@@ -56,13 +56,15 @@ def duration_chart(image, durations, unit):
     upper = max(values) + padding if values else 2
     x_limit = max(6, len(durations))
 
-    put(image, f"{unit.title()} duration", (40, 386), 0.85)
-    put(image, "Completed so far", (40, 418), 0.48, MUTED, 1)
+    put(image, f"{unit.title()} duration", (40, 612 if compact else 386), 0.7 if compact else 0.85)
+    put(image, "Completed so far", (40, 641 if compact else 418), 0.48, MUTED, 1)
 
-    axis_label = np.full((32, 190, 3), BG, np.uint8)
-    centered(axis_label, "Duration (s)", 95, 22, 0.53, MUTED)
+    label_height = 120 if compact else 190
+    axis_label = np.full((32, label_height, 3), BG, np.uint8)
+    centered(axis_label, "Duration (s)", label_height / 2, 22, 0.48 if compact else 0.53, MUTED)
     axis_label = cv2.rotate(axis_label, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    image[530:720, 22:54] = axis_label
+    label_y = 680 if compact else 530
+    image[label_y:label_y + label_height, 22:54] = axis_label
 
     for value in np.linspace(lower, upper, 5):
         y = int(bottom - (value - lower) / (upper - lower) * (bottom - top))
@@ -79,7 +81,7 @@ def duration_chart(image, durations, unit):
     centered(image, f"{unit.title()} number", (left + right) / 2, bottom + 66, 0.53, MUTED)
 
     if not known:
-        centered(image, f"Waiting for a completed {unit}", (left + right) / 2, 620, 0.49, MUTED)
+        centered(image, f"Waiting for a completed {unit}", (left + right) / 2, (top + bottom) // 2, 0.49, MUTED)
         return
 
     fastest = min(values)
@@ -131,6 +133,9 @@ def panel(analysis, frame, width, height, prescription=None, tracking_status=Non
     duration_chart(image, durations, unit)
     duration_summary(image, durations, unit)
 
+    if analysis.exercise == "single_leg_rdl":
+        image = rdl_panel(analysis, frame, durations)
+
     scale = min(width / 608, height / 1080)
     resized = cv2.resize(image, (round(608 * scale), round(1080 * scale)), interpolation=cv2.INTER_AREA)
     result = np.full((height, width, 3), BG, np.uint8)
@@ -138,6 +143,88 @@ def panel(analysis, frame, width, height, prescription=None, tracking_status=Non
     y = (height - resized.shape[0]) // 2
     result[y:y + resized.shape[0], x:x + resized.shape[1]] = resized
     return result
+
+
+def rdl_panel(analysis, frame, durations):
+    image = np.full((1080, 608, 3), BG, np.uint8)
+    details = analysis.details
+    side = details["camera_view"] == "side"
+    count = str(analysis.count_at(frame)) if details["rep_count_available"] else "--"
+    put(image, "Single Leg RDL", (40, 52), 0.95)
+    put(image, f"Supporting leg: {details['supporting_leg'].title()} (configured)", (40, 89), 0.56, BLUE)
+    put(image, count, (40, 192), 2.7, WHITE, 4)
+    put(image, "completed reps" if side else "count unavailable in this view", (40, 223), 0.5, MUTED)
+    put(image, "CURRENT PHASE", (280, 145), 0.44, MUTED)
+    phase = analysis.phase[frame].capitalize()
+    put(image, phase, (280, 182), 0.62, BLUE)
+
+    names = (["knee_flexion_deg", "trunk_lean_deg", "hip_ankle_offset_pct_height"]
+             if side else ["knee_inward_offset_pct_height", "pelvic_tilt_deg", "lateral_trunk_lean_deg"])
+    labels = (["Knee bend", "Trunk lean", "Hip / ankle offset"]
+              if side else ["Knee inward offset", "Pelvic tilt", "Lateral trunk lean"])
+    for y, name, label in zip((265, 299, 333), names, labels):
+        value = analysis.signals[name][frame]
+        units = "deg" if name.endswith("deg") else "% height"
+        text = f"{value:.1f} {units}" if np.isfinite(value) else "unavailable"
+        put(image, label, (40, y), 0.52, MUTED)
+        put(image, text, (340, y), 0.52)
+
+    name = names[0]
+    values = np.asarray(analysis.signals[name], float)
+    start = max(0, frame - round(10 * analysis.fps))
+    visible = values[start:frame + 1]
+    finite = visible[np.isfinite(visible)]
+    unit = "deg" if side else "% image height"
+    put(image, f"{labels[0]} ({unit})", (40, 385), 0.56)
+    left, right, top, bottom = 90, 555, 413, 557
+    cv2.rectangle(image, (left, top), (right, bottom), (50, 53, 58), 1)
+    if len(finite):
+        low, high = float(finite.min()) - 1, float(finite.max()) + 1
+        put(image, f"{high:.1f}", (40, top + 8), 0.4, MUTED, 1)
+        put(image, f"{low:.1f}", (40, bottom), 0.4, MUTED, 1)
+        previous = None
+        for i, value in enumerate(visible):
+            if not np.isfinite(value):
+                previous = None
+                continue
+            point = (int(left + i / max(1, len(visible) - 1) * (right - left)),
+                     int(bottom - (value - low) / (high - low) * (bottom - top)))
+            if previous is not None:
+                cv2.line(image, previous, point, BLUE, 2, cv2.LINE_AA)
+            previous = point
+    else:
+        centered(image, "Measurement unavailable", 320, 491, 0.5, MUTED)
+    put(image, f"{start / analysis.fps:.1f}s", (90, 582), 0.42, MUTED, 1)
+    put(image, f"{frame / analysis.fps:.1f}s", (505, 582), 0.42, MUTED, 1)
+
+    if details["rep_count_available"]:
+        duration_chart(image, durations, "rep", compact=True)
+        duration_summary(image, durations, "rep")
+    else:
+        put(image, "Rep timing unavailable in this view", (40, 659), 0.57, MUTED)
+        put(image, "Use a side recording for hinge repetitions.", (40, 700), 0.5, MUTED, 1)
+    status = details["frame_status"][frame]
+    if status != "observed":
+        put(image, status.replace("_", " "), (40, 1060), 0.44, ORANGE, 1)
+    return image
+
+
+def draw_rdl_ankle_trail(image, analysis, frame):
+    x = analysis.signals["ankle_x_pct_height"]
+    y = analysis.signals["ankle_y_pct_height"]
+    history = round(analysis.details["ankle_trail_seconds"] * analysis.fps)
+    color = BLUE if analysis.details["supporting_leg"] == "left" else ORANGE
+    previous = None
+    for i in range(max(0, frame - history), frame + 1):
+        if not np.isfinite(x[i]) or not np.isfinite(y[i]):
+            previous = None
+            continue
+        point = (round(x[i] / 100 * image.shape[0]), round(y[i] / 100 * image.shape[0]))
+        if previous is not None:
+            cv2.line(image, previous, point, color, 2, cv2.LINE_AA)
+        previous = point
+    if previous is not None and np.isfinite(x[frame]) and np.isfinite(y[frame]):
+        cv2.circle(image, previous, 9, color, 2, cv2.LINE_AA)
 
 
 def render(video, track, analysis, output, prescription):
@@ -160,6 +247,8 @@ def render(video, track, analysis, output, prescription):
             break
 
         if frame_index < len(track["xy"]):
+            if analysis.exercise == "single_leg_rdl":
+                draw_rdl_ankle_trail(frame, analysis, frame_index)
             pose = {
                 "xy": track["xy"][frame_index],
                 "valid": track["valid"][frame_index],

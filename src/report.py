@@ -65,10 +65,45 @@ def write_reports(output, analysis, prescription, run):
     )
 
     summary_path = output / "summary.md"
+    if analysis.exercise == "single_leg_rdl":
+        details = analysis.details
+        summary += (
+            f"\nSupporting leg: {details['supporting_leg']} (configured, not inferred).\n"
+            f"\nView: {details['camera_view']}. Rep timing is available only in side view.\n"
+            "\nMeasurements use observed joints only. Missing, interpolated, overlapping, "
+            "or suspect identity intervals can make measurements unavailable.\n"
+            "\nHip travel is a screen-horizontal offset, not proof of backward motion. "
+            "Ankle movement includes possible camera movement and tracking noise. "
+            "Pelvic tilt does not measure pelvic rotation.\n"
+            "\nRDL detection is provisional and has not been evaluated on labeled RDL recordings.\n"
+        )
+        if not details["rep_count_available"]:
+            summary = summary.replace(f"Observed complete events: {complete}", "Observed complete events: unavailable for this view")
+            summary = summary.replace(f"Observed incomplete/rejected events: {incomplete}", "Observed incomplete/rejected events: unavailable for this view")
+        write_rdl_observations(output, analysis)
     summary_path.write_text(summary)
 
     run_path = output / "run.json"
     run_path.write_text(json.dumps(clean(run), indent=2))
+
+
+def write_rdl_observations(output, analysis):
+    names = list(analysis.signals)
+    with (output / "observations.csv").open("w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=["frame", "time_s", "supporting_leg", "status"] + names)
+        writer.writeheader()
+        for i, status in enumerate(analysis.details["frame_status"]):
+            row = {"frame": i, "time_s": i / analysis.fps,
+                   "supporting_leg": analysis.details["supporting_leg"], "status": status}
+            row.update({name: clean(analysis.signals[name][i]) for name in names})
+            writer.writerow(row)
+    (output / "measurements.json").write_text(json.dumps(clean({
+        "units": analysis.details["units"],
+        "consistency": analysis.details["consistency"],
+        "scope": "whole recording; completed reps only",
+        "events_file": "events.json",
+        "observations_file": "observations.csv",
+    }), indent=2))
 
 
 def plot(output, analysis):
@@ -76,6 +111,23 @@ def plot(output, analysis):
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+
+    if analysis.exercise == "single_leg_rdl":
+        names = [name for name in analysis.signals if analysis.availability[name]]
+        figure, axes = plt.subplots(max(1, len(names)), 1, figsize=(11, max(3, 2.3 * len(names))), squeeze=False)
+        for ax, name in zip(axes[:, 0], names):
+            values = analysis.signals[name]
+            ax.plot(np.arange(len(values)) / analysis.fps, values, color="#1f6fea")
+            ax.set_title(name.replace("_", " "))
+            ax.set_xlabel("Video time (s)")
+            ax.set_ylabel("deg" if name.endswith("deg") else "% image height")
+            ax.grid(alpha=0.2)
+        if not names:
+            axes[0, 0].text(0.5, 0.5, "Measurements unavailable", ha="center")
+        figure.tight_layout()
+        figure.savefig(Path(output) / "movement.png", dpi=150)
+        plt.close(figure)
+        return
 
     signal_name, values = next(iter(analysis.signals.items()))
     values = np.asarray(values, dtype=float)
