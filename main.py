@@ -30,6 +30,11 @@ def main():
 
     if cfg.EXERCISE not in cfg.PRESCRIPTION:
         raise ValueError(f"Unknown exercise: {cfg.EXERCISE}")
+    if cfg.EXERCISE == "single_leg_rdl" and cfg.CAMERA_VIEW != "side":
+        raise ValueError(
+            "Single-leg RDL requires a side-view recording. Set CAMERA_VIEW = 'side' "
+            "and select a side-view video; front and oblique views are not supported."
+        )
     if cfg.EXERCISE == "single_leg_rdl" and cfg.ANALYZED_LEG not in ("left", "right"):
         raise ValueError("Set ANALYZED_LEG to the supporting left or right leg.")
     if not cfg.INPUT_VIDEO.is_file():

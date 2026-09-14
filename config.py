@@ -6,7 +6,7 @@ INPUT_VIDEO = DATA_DIR / "input" / "rdl_left_side.mov"
 
 # Choose: squat, side_step_balance, skater_squat, single_leg_rdl
 EXERCISE = "single_leg_rdl"
-# Choose front, side, or oblique. 
+# Choose front, side, or oblique. Single-leg RDL requires side.
 CAMERA_VIEW = "front"
 # Required for skater_squat and single_leg_rdl: left or right.
 # For skater squat this is the moving leg; for RDL it is the supporting leg.

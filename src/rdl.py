@@ -21,8 +21,10 @@ UNITS = {
 def measurements(track, view, leg, width, height, fps, cfg):
     if leg not in ("left", "right"):
         raise ValueError("For RDL, ANALYZED_LEG must be the supporting left or right leg.")
-    if view not in ("side", "front", "oblique"):
-        raise ValueError("CAMERA_VIEW must be side, front, or oblique.")
+    if view != "side":
+        raise ValueError(
+            "Single-leg RDL requires a side-view recording; front and oblique views are not supported."
+        )
     if not width or not height or fps <= 0:
         raise ValueError("RDL measurements require video dimensions and frame rate.")
 
